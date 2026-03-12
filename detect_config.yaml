@@ -1,0 +1,20 @@
+detection_threshold: 10 #1.2
+background_subtraction: True
+err: rms
+segmentation_map: True
+min_area: 5
+deblend_nthresh: 32
+deblend_cont: 0.005
+filter_type: conv
+filter_kernel: detection_kernels/roman_kernel_FWHM_1.2_10x10.txt
+photometry_method:
+  kron:
+    multiplicative_factor: 2.5
+    flux_rad_fraction: 0.5
+  aperture:
+    radii: 
+      - 3
+      - 5
+      - 7
+
+
