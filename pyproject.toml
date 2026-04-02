@@ -21,6 +21,7 @@ dependencies = [
     "numpy>=1.17",
     "piff>=1.6",
     "sep>=1.4",
+    "numba",
 ]
 
 [project.urls]
