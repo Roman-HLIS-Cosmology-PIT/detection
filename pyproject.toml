@@ -18,7 +18,7 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.10"
 dependencies = [
-    "numpy>=1.17",
+    "numpy>=2.2.6",
     "piff>=1.6",
     "sep>=1.4.1",
     "numba",
