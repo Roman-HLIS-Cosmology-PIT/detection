@@ -64,8 +64,6 @@ select = [
     "W",
     # Pyflakes
     "F",
-    # pep8-naming
-    "N",
     # pyupgrade
     "UP",
     # flake8-bugbear
@@ -89,6 +87,7 @@ select = [
     "NPY201",
 ]
 ignore = [
+    "N", # pep8-naming
     "UP006", # Allow non standard library generics in type hints
     "UP007", # Allow Union in type hints
     "SIM114", # Allow if with same arms

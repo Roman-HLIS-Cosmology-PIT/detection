@@ -1,26 +1,30 @@
 import copy
-
 from math import sqrt
 
-import numpy as np
+# from sf_tools.image.stamp import FetchStamps
+import asdf
 import numba as nb
-
+import numpy as np
 import sep
-
-from astropy.wcs import WCS
+import yaml
 from astropy.io import fits
 from astropy.table import Table
-
-#from sf_tools.image.stamp import FetchStamps
-
-from scipy.stats import median_abs_deviation as mad
-
-import yaml
-
-#import asdf
+from astropy.wcs import WCS
 
 
 def load_config(config_file):
+    """load config from yaml file
+
+    Parameters
+    ----------
+    config_file : str
+        path to config file
+
+    Returns
+    -------
+    config : dict
+        config dictionary
+    """
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
     return config
@@ -40,6 +44,25 @@ def load_config(config_file):
 
 @nb.njit(fastmath=True, cache=True)
 def get_cutout_size(Qxx, Qxy, Qyy, n_sigma=3.0):
+    """
+    Compute the size of a cutout based on the second moments.
+
+    Parameters
+    ----------
+    Qxx : float
+        Second moment in the x direction.
+    Qxy : float
+        Second moment in the xy direction.
+    Qyy : float
+        Second moment in the y direction.
+    n_sigma : float, optional
+        Enlarge the cutout size by this many sigma. Default 3.0
+
+    Returns
+    -------
+    cutout_size : float
+        The size of the cutout.
+    """
     # Compute trace and determinant
     trace = Qxx + Qyy
 
@@ -54,6 +77,29 @@ def get_cutout_size(Qxx, Qxy, Qyy, n_sigma=3.0):
 
 
 def get_cutout(img, x, y, stamp_size):
+    """
+    Get a cutout from the image centered at (x, y) with size stamp_size.
+
+    Parameters
+    ----------
+    img : 2D array
+        The input image.
+    x : float
+        The x-coordinate of the center of the cutout.
+    y : float
+        The y-coordinate of the center of the cutout.
+    stamp_size : int
+        The size of the cutout (in pixels).
+
+    Returns
+    -------
+    cutout : 2D array
+        The cutout image.
+    cutout_row : int
+        The row index of the center of the cutout in the cutout image.
+    cutout_col : int
+        The column index of the center of the cutout in the cutout image.
+    """
     orow = int(y)
     ocol = int(x)
     half_box_size = stamp_size // 2
@@ -78,11 +124,25 @@ def get_cutout(img, x, y, stamp_size):
         cutout_col,
     )
 
+
 def read_kernel(kernel_file_name):
+    """
+    Read the kernel from a file.
+
+    Parameters
+    ----------
+    kernel_file_name : str
+        Path to the kernel file.
+
+    Returns
+    -------
+    kernel : 2D array
+        The kernel read from the file.
+    """
     ## overwrite to DES kernel for now
     kernel = np.loadtxt(kernel_file_name)
-    print ('kernel: ', kernel_file_name)
-    #kernel = DES_KERNEL
+    print("kernel: ", kernel_file_name)
+    # kernel = DES_KERNEL
     return kernel
 
 
@@ -113,28 +173,99 @@ def _add_photometry_columns(cat_dict, key_prefix, flux, fluxerr, flags, flux_rad
     cat_dict[f"{key_prefix}_flux_radius"] = flux_radius
     return cat_dict
 
+
 def read_asdf(filename):
+    """
+    Read data from an ASDF file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the ASDF file.
+
+    Returns
+    -------
+    data : dict
+        The data read from the ASDF file.
+    """
     with asdf.open(filename) as af:
-        data = af['data'] # what's going to be formatted like?
+        data = af["data"]  # what's going to be formatted like?
     return data
 
+
 def read_fits(filename, sca):
+    """
+    Read data and header from a FITS file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the FITS file.
+    sca : int
+        The index of the HDU to read.
+
+    Returns
+    -------
+    data : 2D array
+        The data read from the FITS file.
+    header : astropy.io.fits.Header
+        The header read from the FITS file.
+    """
     with fits.open(filename) as hdul:
         data = hdul[sca].data
         header = hdul[sca].header
     return data, header
+
+
 def get_weights_from_image(img):
+    """
+    Get weights from an image.
+    For now, we just return an array of ones with the same shape as the image.
+
+    Parameters
+    ----------
+    img : 2D array
+        The input image.
+
+    Returns
+    -------
+    weights : 2D array
+        An array of ones with the same shape as the input image.
+    """
     weights = np.ones(img.shape)
     return weights
-    
 
-def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=None):
+
+def get_cat(img_filename, config_file_name, sca=1, header=None, wcs=None, mask=None):
+    """
+    Get a catalog of detected objects from an image.
+
+    Parameters
+    ----------
+    img_filename : str
+        Path to the FITS file.
+    config_file_name : str
+        Path to the configuration file.
+    sca : int, optional
+        The index of the HDU to read. Default is 1.
+    header : astropy.io.fits.Header, optional
+        The header of the image. Default is None.
+    wcs : astropy.wcs.WCS, optional
+        The world coordinate system of the image. Default is None.
+    mask : 2D array, optional
+        A mask for the image. Default is None.
+
+    Returns
+    -------
+    cat : dict
+        A dictionary containing the detected objects and their properties.
+    """
     config = load_config(config_file_name)
-    #Add a function to read image and weights from file
+    # Add a function to read image and weights from file
     img, header = read_fits(img_filename, sca)
     img = img.astype(float)
-    weight = get_weights_from_image(img) # needs to be changed for better variable naming...
-    #TODO!!!
+    weight = get_weights_from_image(img)  # needs to be changed for better variable naming...
+    # TODO!!!
     # NOTE: Might need to look again into this. For now we keep it simple.
     rms = np.zeros_like(weight)
     mask_rms = np.ones_like(weight)
@@ -155,7 +286,7 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
     if config["background_subtraction"]:
         bkg = sep.Background(img, mask=mask_rms).globalback
     else:
-        bkg = np.zeros_like(img) #will fix later
+        bkg = np.zeros_like(img)  # will fix later
 
     img_sub = img - bkg
 
@@ -215,9 +346,9 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
         good_kron = (
             (kronrads > 0)
             & (obj["b"] > 0)
-            & (obj["a"] >= 0) #relaxing kron condition on a to allow circular sources
-            & (obj["theta"] >= -np.pi/2)
-            & (obj["theta"] <= np.pi/2)
+            & (obj["a"] >= 0)  # relaxing kron condition on a to allow circular sources
+            & (obj["theta"] >= -np.pi / 2)
+            & (obj["theta"] <= np.pi / 2)
         )
         kflux = np.ones(n_obj) * -10.0
         kfluxerr = np.ones(n_obj) * -10.0
@@ -235,8 +366,8 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
                 b=obj["b"][good_kron],
                 theta=obj["theta"][good_kron],
                 r=kron_mult * kronrads[good_kron],
-                err = rms,
-                subpix = 1,
+                err=rms,
+                subpix=1,
                 seg_id=seg_id[good_kron],
                 segmap=seg,
                 mask=mask_rms,
@@ -244,32 +375,34 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
             kflux[good_kron] = kflux_g
             kfluxerr[good_kron] = kfluxerr_g
             kflags[good_kron] |= kflag_g
-        
+
             kflux_rad[good_kron], kflags_rad[good_kron] = sep.flux_radius(
                 data=img_sub,
                 x=obj["x"][good_kron],
                 y=obj["y"][good_kron],
                 rmax=6.0 * obj["a"][good_kron],
                 frac=phot_flux_frac,
-                normflux=kflux_g, #should be correct implementation of normflux
+                normflux=kflux_g,  # should be correct implementation of normflux
                 subpix=5,
                 seg_id=seg_id[good_kron],
                 segmap=seg,
                 mask=mask_rms,
-            )    
+            )
         kflags_tot = kflags | kflags_rad | krflags
         phot_cols = _add_photometry_columns(phot_cols, "kron", kflux, kfluxerr, kflags_tot, kflux_rad)
         phot_cols["kron_radius"] = kronrads
         phot_cols["kron_multiplicative_factor"] = np.full(n_obj, kron_mult, dtype=float)
 
-        #For objects where the radius is too small for the Kron radius, we replicate Source Extractor behavior as follows
+        # For objects where the radius is too small for the Kron radius, we replicate Source Extractor
+        # behavior as follows
         r_min = config.get("min_radius", 1.75)
-        use_circle = kronrads * np.sqrt(obj["a"] * obj["b"]) < r_min    
-        cflux, cfluxerr, cflag = sep.sum_circle(img_sub, obj["x"][use_circle], obj["y"][use_circle],
-                                                r_min, subpix = 1)
+        use_circle = kronrads * np.sqrt(obj["a"] * obj["b"]) < r_min
+        cflux, cfluxerr, cflag = sep.sum_circle(
+            img_sub, obj["x"][use_circle], obj["y"][use_circle], r_min, subpix=1
+        )
         kflux[use_circle] = cflux
         kfluxerr[use_circle] = cfluxerr
-        kflags_tot[use_circle] = cflag 
+        kflags_tot[use_circle] = cflag
 
         # Optional: keep legacy single-method outputs if downstream expects them
         fluxes, fluxerrs, flags = kflux, kfluxerr, kflags_tot
@@ -282,7 +415,7 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
     if "aperture" in phot_cfg:
         ap_opts = phot_cfg.get("aperture", {}) or {}
         radii = ap_opts.get("radii", [])
-        if not isinstance(radii, (list, tuple)) or len(radii) == 0:
+        if not isinstance(radii, list | tuple) or len(radii) == 0:
             raise ValueError("photometry_method.aperture.radii must be a non-empty list")
 
         for r in radii:
@@ -325,8 +458,8 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
     out["dec"] = dec
     out["x"] = obj["x"]
     out["y"] = obj["y"]
-    #out["x_mom"] = obj["x"]/np.sqrt(fluxes)
-    #out["y_mom"] = obj["y"]/np.sqrt(fluxes)
+    # out["x_mom"] = obj["x"]/np.sqrt(fluxes)
+    # out["y_mom"] = obj["y"]/np.sqrt(fluxes)
     out["a"] = obj["a"]
     out["b"] = obj["b"]
     out["xx"] = obj["x2"]
@@ -342,7 +475,7 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
     out["flags"] = obj["flag"]
     out["flux_flags"] = krflags | flags | flags_rad
     out["ext_flags"] = ext_flags
-    out["moment_radius"] = 0.5*np.sqrt(out["xx"]+out["yy"])
+    out["moment_radius"] = 0.5 * np.sqrt(out["xx"] + out["yy"])
 
     # Merge photometry columns into the output catalog
     for k, v in phot_cols.items():
@@ -350,12 +483,10 @@ def get_cat(img_filename, config_file_name,sca = 1, header=None, wcs=None, mask=
 
     return out, seg
 
+
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    out, seg = get_cat('', 'detect_config.yaml')
-    out.write("test_catalog.fits", format = 'fits', overwrite = True)
+    out, seg = get_cat("", "detect_config.yaml")
+    out.write("test_catalog.fits", format="fits", overwrite=True)
 
-    #plt.scatter(out['flux_radius'], 30-2.5*np.log10(out['flux']), alpha=0.3)
-    #plt.show()
-
-
+    # plt.scatter(out['flux_radius'], 30-2.5*np.log10(out['flux']), alpha=0.3)
+    # plt.show()
